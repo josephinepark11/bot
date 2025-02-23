@@ -51,11 +51,40 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Failed to sync commands: {e}")
 
-# OWNER-ONLY CHECK
-def is_owner(ctx):
-    return ctx.author.id == BOT_OWNER_ID
+# ------------------------- /raypost Command (GUI Modal) -------------------------
 
-# ------------------------- Setup Command (OWNER ONLY) -------------------------
+class RaypostModal(Modal):
+    def __init__(self):
+        super().__init__(title="📢 Create a Raypost")
+        self.description = TextInput(label="Enter the message:", style=discord.TextStyle.paragraph)
+        self.gif_url = TextInput(label="Optional GIF URL (leave blank if none)", required=False)
+
+        self.add_item(self.description)
+        self.add_item(self.gif_url)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="📢 Announcement",
+            description=self.description.value,
+            color=discord.Color.gold()
+        )
+
+        if self.gif_url.value.strip():  # If user provided a GIF URL
+            embed.set_image(url=self.gif_url.value.strip())
+
+        embed.set_footer(text=f"Posted by {interaction.user.display_name}", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
+        
+        await interaction.response.send_message("✅ Raypost sent!", ephemeral=True)
+        await interaction.channel.send(embed=embed)
+
+@bot.tree.command(name="raypost", description="Create a Raypost with a description and optional GIF.")
+async def raypost(interaction: discord.Interaction):
+    if interaction.user.id != BOT_OWNER_ID:
+        await interaction.response.send_message("❌ You are not authorized to use this command.", ephemeral=True)
+        return
+    await interaction.response.send_modal(RaypostModal())
+
+# ------------------------- /setup Command (Dropdown) -------------------------
 
 class SetupModal(Modal):
     def __init__(self, setting_name: str):
@@ -103,7 +132,11 @@ async def setup(interaction: discord.Interaction):
         return
     await interaction.response.send_message("Select an option to set up:", view=SetupView(), ephemeral=True)
 
+
 # ------------------------- Owner-Only Commands -------------------------
+
+def is_owner(ctx):
+    return ctx.author.id == BOT_OWNER_ID
 
 async def display_command(ctx, command_name: str):
     if not is_owner(ctx):
@@ -126,8 +159,10 @@ commands_list = {
 for cmd, setting in commands_list.items():
     async def command_func(ctx, command_name=setting):
         await display_command(ctx, command_name)
+    
     command_func.__name__ = f"display_{cmd}"
     bot.command(name=cmd)(commands.check(is_owner)(command_func))
+
 
 # ------------------------- List Command -------------------------
 
