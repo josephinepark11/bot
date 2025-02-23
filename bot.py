@@ -45,6 +45,13 @@ async def on_ready():
     print(f'Bot is ready! Logged in as {bot.user}')
     server_settings.update(load_settings())
 
+    try:
+        synced = await bot.tree.sync()  # Force sync commands
+        print(f"✅ Synced {len(synced)} commands.")
+    except Exception as e:
+        print(f"❌ Failed to sync commands: {e}")
+
+
 # OWNER-ONLY CHECK
 def is_owner(ctx):
     return ctx.author.id == BOT_OWNER_ID
@@ -204,26 +211,25 @@ class PaginationView(View):
         start_idx = self.current_page * self.per_page
         end_idx = start_idx + self.per_page
         page_results = self.results[start_idx:end_idx]
-    
+
         embed = discord.Embed(
             title=f"🔍 **RESULTS FOR '{self.keyword.upper()}'**",  # BIGGER title
             color=discord.Color.blue()
         )
-    
+
         # Make sure numbering starts at 1 per page (1-40, 41-80, etc.)
         embed.description = "\n".join(f"{start_idx + idx + 1}. {item}" for idx, item in enumerate(page_results))
-    
+
         total_pages = (len(self.results) - 1) // self.per_page + 1
         timestamp = datetime.now().strftime("%I:%M %p")
-    
+
         # Footer with user profile pic
         embed.set_footer(
             text=f"Requested by {self.author} | Page {self.current_page+1}/{total_pages} • Today at {timestamp}",
             icon_url=self.author.avatar.url if self.author.avatar else None
         )
-    
-        return embed
 
+        return embed
 
 
 
