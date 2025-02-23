@@ -210,8 +210,8 @@ class PaginationView(View):
             color=discord.Color.blue()
         )
     
-        # Fix the numbering so it always starts at 1 on each page
-        embed.description = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(page_results))
+        # Make sure numbering starts at 1 per page (1-40, 41-80, etc.)
+        embed.description = "\n".join(f"{start_idx + idx + 1}. {item}" for idx, item in enumerate(page_results))
     
         total_pages = (len(self.results) - 1) // self.per_page + 1
         timestamp = datetime.now().strftime("%I:%M %p")
@@ -223,6 +223,7 @@ class PaginationView(View):
         )
     
         return embed
+
 
 
 
