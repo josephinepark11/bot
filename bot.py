@@ -1,35 +1,37 @@
 import discord
 from discord.ext import commands
-from discord.ui import Select, View, Modal, TextInput, Button
+from discord.ui import View, Button, Modal, TextInput, Select
 import json
 import os
+import re
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID"))  # Your Discord ID
 
-# Bot configuration
 COMMAND_PREFIX = '.'
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
 
-# Server settings storage
 SETTINGS_FILE = 'server_settings.json'
+ITEMS_FILE = "items.dat"
 server_settings = {}
 
-# Load settings from JSON file
+# ------------------------- Load & Save Settings -------------------------
+
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, 'r') as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            return {}  # Return empty if file is corrupted
+            return {}  
     return {}
 
-# Save settings to JSON file
 def save_settings():
     try:
         with open(SETTINGS_FILE, 'w') as f:
@@ -41,25 +43,22 @@ def save_settings():
 async def on_ready():
     global server_settings
     print(f'Bot is ready! Logged in as {bot.user}')
-    server_settings.update(load_settings())  # Merge loaded settings
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"Failed to sync commands: {e}")
+    server_settings.update(load_settings())
 
-# Modal for entering setup messages
+# OWNER-ONLY CHECK
+def is_owner(ctx):
+    return ctx.author.id == BOT_OWNER_ID
+
+# ------------------------- Setup Command (OWNER ONLY) -------------------------
+
 class SetupModal(Modal):
     def __init__(self, setting_name: str):
         super().__init__(title=f"Setup {setting_name.upper()}")
         self.setting_name = setting_name
-        self.add_item(TextInput(
-            label="Enter the message:",
-            style=discord.TextStyle.paragraph  # Larger text box
-        ))
+        self.add_item(TextInput(label="Enter the message:", style=discord.TextStyle.paragraph))
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)  # Fixes the error
+        await interaction.response.defer(ephemeral=True)
 
         guild_id = str(interaction.guild_id)
         if guild_id not in server_settings:
@@ -68,13 +67,8 @@ class SetupModal(Modal):
         server_settings[guild_id][self.setting_name] = self.children[0].value
         save_settings()
 
-        # ✅ Confirmation message now includes the correct command
-        await interaction.followup.send(
-            f" {self.setting_name.upper()} has been set up! Do `.{self.setting_name}` to show the message.",
-            ephemeral=True
-        )
+        await interaction.followup.send(f"✅ {self.setting_name.upper()} has been set up! Use `.{self.setting_name}` to view it.", ephemeral=True)
 
-# Dropdown menu for setup
 class SetupDropdown(Select):
     def __init__(self):
         options = [
@@ -96,12 +90,20 @@ class SetupView(View):
         super().__init__()
         self.add_item(SetupDropdown())
 
-@bot.tree.command(name="setup", description="Set up messages for commands")
+@bot.tree.command(name="setup", description="Set up messages for commands (OWNER ONLY)")
 async def setup(interaction: discord.Interaction):
+    if interaction.user.id != BOT_OWNER_ID:
+        await interaction.response.send_message("❌ You are not authorized to use this command.", ephemeral=True)
+        return
     await interaction.response.send_message("Select an option to set up:", view=SetupView(), ephemeral=True)
 
-# Function to display stored messages
+# ------------------------- Owner-Only Commands -------------------------
+
 async def display_command(ctx, command_name: str):
+    if not is_owner(ctx):
+        await ctx.send("❌ You are not authorized to use this command.")
+        return
+    
     guild_id = str(ctx.guild.id)
     message = server_settings.get(guild_id, {}).get(command_name)
     if message:
@@ -109,7 +111,6 @@ async def display_command(ctx, command_name: str):
     else:
         await ctx.send(f"No {command_name.upper()} message has been set. Use `/setup` to set it up.")
 
-# Commands to display messages
 commands_list = {
     "rgt": "rgt", "uid": "uid", "gcash": "gcash", 
     "rategt": "rgtrate", "rgcash": "rgcash", "rbin": "binancerate"
@@ -118,74 +119,105 @@ commands_list = {
 for cmd, setting in commands_list.items():
     async def command_func(ctx, command_name=setting):
         await display_command(ctx, command_name)
-    command_func.__name__ = f"display_{cmd}"  # Unique function name to avoid errors
-    bot.command(name=cmd)(command_func)
+    command_func.__name__ = f"display_{cmd}"
+    bot.command(name=cmd)(commands.check(is_owner)(command_func))
 
-# ------------------------- /raypost Command -------------------------
+# ------------------------- ID Search Command (Public) -------------------------
 
-class PostModal(Modal):
-    def __init__(self):
-        super().__init__(title="Create a Post")
+def search_items(keyword):
+    """Search for items in the items.dat file by matching names."""
+    if not os.path.exists(ITEMS_FILE):
+        return []
 
-        # Large description box
-        self.description = TextInput(
-            label="Description:",
-            style=discord.TextStyle.paragraph,
-            placeholder="Enter the content here (max 4000 characters)",
-            max_length=4000
-        )
-        self.add_item(self.description)
-
-        # Optional GIF URL
-        self.gif_url = TextInput(
-            label="GIF URL (Optional):",
-            style=discord.TextStyle.short,
-            placeholder="Enter a GIF URL (optional)",
-            required=False
-        )
-        self.add_item(self.gif_url)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        embed = discord.Embed(description=self.description.value, color=discord.Color.blue())
+    try:
+        results = []
+        current_id = None
+        current_name = None
         
-        if self.gif_url.value:
-            embed.set_image(url=self.gif_url.value)
+        with open(ITEMS_FILE, "r", encoding="utf-8") as file:
+            for line in file:
+                line = line.strip()
+                
+                if line.startswith('Item ID: '):
+                    current_id = int(line.split(': ')[1])
+                elif line.startswith('Name: '):
+                    current_name = line.split(': ')[1]
+                    # If we have both ID and name, check if it matches search
+                    if current_id is not None and keyword.lower() in current_name.lower():
+                        seed_id = current_id + 1
+                        results.append(f"{current_name} = `{current_id}` (Seed ID: `{seed_id}`)")
+                    # Reset for next item
+                    current_id = None
+                    current_name = None
 
-        view = PostView(embed)
-        await interaction.response.send_message("Review your post and confirm:", embed=embed, view=view, ephemeral=True)
-
-class PostView(View):
-    def __init__(self, embed):
+        return results
+    except Exception as e:
+        print(f"Error reading file: {e}")
+        return []
+    
+class PaginationView(View):
+    def __init__(self, results, keyword, author, per_page=10):
         super().__init__(timeout=60)
-        self.embed = embed
+        self.results = results
+        self.keyword = keyword
+        self.author = author
+        self.per_page = per_page
+        self.current_page = 0
 
-        # Post button
-        self.post_button = Button(label="Post", style=discord.ButtonStyle.green)
-        self.post_button.callback = self.post_message
-        self.add_item(self.post_button)
+        self.prev_button = Button(label="◀", style=discord.ButtonStyle.grey)
+        self.next_button = Button(label="▶", style=discord.ButtonStyle.grey)
 
-        # Cancel button
-        self.cancel_button = Button(label="Cancel", style=discord.ButtonStyle.red)
-        self.cancel_button.callback = self.cancel_message
-        self.add_item(self.cancel_button)
+        self.prev_button.callback = self.previous_page
+        self.next_button.callback = self.next_page
 
-    async def post_message(self, interaction: discord.Interaction):
-        await interaction.channel.send(embed=self.embed)
-        await interaction.response.send_message(" Your post has been published!", ephemeral=True)
-        self.stop()
+        self.add_item(self.prev_button)
+        self.add_item(self.next_button)
+        self.update_buttons()
 
-    async def cancel_message(self, interaction: discord.Interaction):
-        await interaction.response.send_message(" Post creation was canceled.", ephemeral=True)
-        self.stop()
+    def update_buttons(self):
+        self.prev_button.disabled = self.current_page == 0
+        self.next_button.disabled = (self.current_page + 1) * self.per_page >= len(self.results)
 
-@bot.tree.command(name="raypost", description="Create a custom post with a GUI")
-async def raypost(interaction: discord.Interaction):
-    await interaction.response.send_modal(PostModal())
+    async def update_message(self, interaction):
+        embed = self.create_embed()
+        self.update_buttons()
+        await interaction.response.edit_message(embed=embed, view=self)
 
-# ------------------------- Bot Runner -------------------------
+    async def previous_page(self, interaction: discord.Interaction):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ You cannot control this pagination!", ephemeral=True)
+        self.current_page -= 1
+        await self.update_message(interaction)
 
-if __name__ == "__main__":
-    if TOKEN:
-        bot.run(TOKEN)
-    else:
-        print("Error: DISCORD_TOKEN is missing in .env file!")
+    async def next_page(self, interaction: discord.Interaction):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ You cannot control this pagination!", ephemeral=True)
+        self.current_page += 1
+        await self.update_message(interaction)
+
+    def create_embed(self):
+        start_idx = self.current_page * self.per_page
+        end_idx = start_idx + self.per_page
+        page_results = self.results[start_idx:end_idx]
+
+        embed = discord.Embed(title=f"🔍 Results for '{self.keyword}'", color=discord.Color.blue())
+        embed.description = "\n".join(f"{i+1}. {item}" for i, item in enumerate(page_results, start=start_idx + 1))
+
+        return embed
+
+@bot.command(name="id")
+async def search_item(ctx, *, item_name: str):
+    if len(item_name) < 3:
+        await ctx.send("❌ Please enter at least **3 characters** to search.")
+        return
+
+    results = search_items(item_name)
+    if not results:
+        await ctx.send(f"❌ No items found for '{item_name}'.")
+        return
+
+    view = PaginationView(results, item_name, ctx.author)
+    embed = view.create_embed()
+    await ctx.send(embed=embed, view=view)
+
+bot.run(TOKEN)
