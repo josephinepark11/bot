@@ -204,23 +204,26 @@ class PaginationView(View):
         start_idx = self.current_page * self.per_page
         end_idx = start_idx + self.per_page
         page_results = self.results[start_idx:end_idx]
-
+    
         embed = discord.Embed(
-            title=f"🔍 **RESULTS FOR '{self.keyword.upper()}'**",  # BIG title
+            title=f"🔍 **RESULTS FOR '{self.keyword.upper()}'**",  # BIGGER title
             color=discord.Color.blue()
         )
-        embed.description = "\n".join(f"{i+1}. {item}" for i, item in enumerate(page_results, start=start_idx + 1))
-
+    
+        # Fix the numbering so it always starts at 1 on each page
+        embed.description = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(page_results))
+    
         total_pages = (len(self.results) - 1) // self.per_page + 1
         timestamp = datetime.now().strftime("%I:%M %p")
-
-        # Set user profile picture in footer
+    
+        # Footer with user profile pic
         embed.set_footer(
             text=f"Requested by {self.author} | Page {self.current_page+1}/{total_pages} • Today at {timestamp}",
             icon_url=self.author.avatar.url if self.author.avatar else None
         )
-
+    
         return embed
+
 
 
 
