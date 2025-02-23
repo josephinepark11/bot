@@ -150,13 +150,14 @@ def search_items(keyword):
 
                 # Search for substring match
                 if keyword.lower() in name.lower():
-                    results.append(f"**{name}** - **{item_id}**")
-                    results.append(f"**{seed_name}** - **{seed_id}**")
+                    results.append(f"{name} - {item_id}")
+                    results.append(f"{seed_name} - {seed_id}")
 
         return results  
     except Exception as e:
         print(f"Error reading file: {e}")
         return []
+
 
     
 class PaginationView(View):
@@ -204,7 +205,10 @@ class PaginationView(View):
         end_idx = start_idx + self.per_page
         page_results = self.results[start_idx:end_idx]
 
-        embed = discord.Embed(title=f"🔍 Results for '{self.keyword}'", color=discord.Color.blue())
+        embed = discord.Embed(
+            title=f"🔍 **RESULTS FOR '{self.keyword.upper()}'**",  # BIG title
+            color=discord.Color.blue()
+        )
         embed.description = "\n".join(f"{i+1}. {item}" for i, item in enumerate(page_results, start=start_idx + 1))
 
         total_pages = (len(self.results) - 1) // self.per_page + 1
