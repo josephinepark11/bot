@@ -145,12 +145,13 @@ def search_items(keyword):
             if name_match and id_match:
                 name = name_match.group(1).strip()
                 item_id = int(id_match.group(1).strip())
-                seed_id = item_id + 1  # Always seed ID = item ID + 1
+                seed_name = f"{name} Seed"
+                seed_id = item_id + 1  
 
                 # Search for substring match
                 if keyword.lower() in name.lower():
                     results.append(f"**{name}** - **{item_id}**")
-                    results.append(f"SEED HERE - **{seed_id}**")
+                    results.append(f"**{seed_name}** - **{seed_id}**")
 
         return results  
     except Exception as e:
@@ -208,9 +209,15 @@ class PaginationView(View):
 
         total_pages = (len(self.results) - 1) // self.per_page + 1
         timestamp = datetime.now().strftime("%I:%M %p")
-        embed.set_footer(text=f"Requested by {self.author} | Page {self.current_page+1}/{total_pages} • Today at {timestamp}")
+
+        # Set user profile picture in footer
+        embed.set_footer(
+            text=f"Requested by {self.author} | Page {self.current_page+1}/{total_pages} • Today at {timestamp}",
+            icon_url=self.author.avatar.url if self.author.avatar else None
+        )
 
         return embed
+
 
 
 @bot.command(name="id")
