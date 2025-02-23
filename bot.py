@@ -29,7 +29,7 @@ def load_settings():
             with open(SETTINGS_FILE, 'r') as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            return {}  
+            return {}
     return {}
 
 def save_settings():
@@ -46,7 +46,7 @@ async def on_ready():
     server_settings.update(load_settings())
 
     try:
-        synced = await bot.tree.sync()  # Sync slash commands
+        synced = await bot.tree.sync()  # Syncs slash commands globally
         print(f"✅ Synced {len(synced)} commands.")
     except Exception as e:
         print(f"❌ Failed to sync commands: {e}")
@@ -73,23 +73,23 @@ class SetupModal(Modal):
         server_settings[guild_id][self.setting_name] = self.children[0].value
         save_settings()
 
-        await interaction.followup.send(f"✅ {self.setting_name.upper()} has been set up! Use `.{self.setting_name}` to view it.", ephemeral=True)
+        await interaction.followup.send(f"✅ `{self.setting_name.upper()}` has been set! Use `.{self.setting_name}` to view it.", ephemeral=True)
 
 class SetupDropdown(Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="CPS PAYMENT"),
-            discord.SelectOption(label="GCASH PAYMENT"),
-            discord.SelectOption(label="RGT PAYMENT"),
-            discord.SelectOption(label="HOW TO GET UID"),
-            discord.SelectOption(label="RGT RATE"),
-            discord.SelectOption(label="GCASH RATE"),
-            discord.SelectOption(label="BINANCE RATE"),
+            discord.SelectOption(label="CPS", value="cps"),
+            discord.SelectOption(label="GCASH", value="gcash"),
+            discord.SelectOption(label="RGT", value="rgt"),
+            discord.SelectOption(label="UID", value="uid"),
+            discord.SelectOption(label="RGT-R", value="rgtrate"),
+            discord.SelectOption(label="CPS-R", value="cpsrate"),
+            discord.SelectOption(label="BINANCE-R", value="binancerate"),
         ]
         super().__init__(placeholder="Choose an option to set up", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(SetupModal(self.values[0].lower().replace(" ", "")))
+        await interaction.response.send_modal(SetupModal(self.values[0].lower()))
 
 class SetupView(View):
     def __init__(self):
@@ -103,29 +103,6 @@ async def setup(interaction: discord.Interaction):
         return
     await interaction.response.send_message("Select an option to set up:", view=SetupView(), ephemeral=True)
 
-#------------------------- List of Commands -------------------------
-
-@bot.command(name="list")
-async def list_commands(ctx):
-    embed = discord.Embed(title="📜 List of Commands", color=discord.Color.blue())
-    embed.description = "Here are all the available `.commands` you can use:\n\n"
-    
-    commands_info = {
-        ".cps": "CPS Payment Information",
-        ".gcash": "GCash Payment Details",
-        ".rgt": "RGT Payment Info",
-        ".uid": "How to Get UID",
-        ".rgtrate": "RGT Rate Information",
-        ".gcashrate": "GCash Rate Details",
-        ".binancerate": "Binance Rate Details",
-    }
-    
-    for cmd, desc in commands_info.items():
-        embed.description += f"**{cmd}** - {desc}\n"
-
-    embed.description += "\nUse `/setup` to configure these commands."
-    await ctx.send(embed=embed)
-
 # ------------------------- Owner-Only Commands -------------------------
 
 async def display_command(ctx, command_name: str):
@@ -138,16 +115,12 @@ async def display_command(ctx, command_name: str):
     if message:
         await ctx.send(message)
     else:
-        await ctx.send(f"No {command_name.upper()} message has been set. Use `/setup` to set it up.")
+        await ctx.send(f"No `{command_name.upper()}` message has been set. Use `/setup` to set it up.")
 
+# Register commands dynamically
 commands_list = {
-    "cps": "cpspayment",
-    "gcash": "gcashpayment",
-    "rgt": "rgtpayment",
-    "uid": "howtogetuid",
-    "rgtrate": "rgtrate",
-    "gcashrate": "gcashrate",
-    "binancerate": "binancerate",
+    "cps": "cps", "gcash": "gcash", "rgt": "rgt", "uid": "uid",
+    "rgtrate": "rgtrate", "cpsrate": "cpsrate", "binancerate": "binancerate"
 }
 
 for cmd, setting in commands_list.items():
@@ -155,6 +128,24 @@ for cmd, setting in commands_list.items():
         await display_command(ctx, command_name)
     command_func.__name__ = f"display_{cmd}"
     bot.command(name=cmd)(commands.check(is_owner)(command_func))
+
+# ------------------------- List Command -------------------------
+
+@bot.command(name="list")
+async def list_commands(ctx):
+    embed = discord.Embed(title="📜 List of Commands", color=discord.Color.blue())
+    embed.description = (
+        "**Here are all the available `.commands` you can use:**\n"
+        "**.cps** - CPS Payment Information\n"
+        "**.gcash** - GCash Payment Details\n"
+        "**.rgt** - RGT Payment Info\n"
+        "**.uid** - How to Get UID\n"
+        "**.rgtrate** - RGT Rate Information\n"
+        "**.cpsrate** - CPS Rate Information\n"
+        "**.binancerate** - Binance Rate Details\n\n"
+        "Use `/setup` to configure these commands."
+    )
+    await ctx.send(embed=embed)
 
 # ------------------------- ID Search Command (Public) -------------------------
 
