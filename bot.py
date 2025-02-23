@@ -46,11 +46,10 @@ async def on_ready():
     server_settings.update(load_settings())
 
     try:
-        synced = await bot.tree.sync()  # Force sync commands
+        synced = await bot.tree.sync()  # Sync slash commands
         print(f"✅ Synced {len(synced)} commands.")
     except Exception as e:
         print(f"❌ Failed to sync commands: {e}")
-
 
 # OWNER-ONLY CHECK
 def is_owner(ctx):
@@ -79,18 +78,18 @@ class SetupModal(Modal):
 class SetupDropdown(Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="GCASH PAYMENT"),
             discord.SelectOption(label="CPS PAYMENT"),
+            discord.SelectOption(label="GCASH PAYMENT"),
             discord.SelectOption(label="RGT PAYMENT"),
             discord.SelectOption(label="HOW TO GET UID"),
-            discord.SelectOption(label="RGTRATE"),
-            discord.SelectOption(label="GCASHRATE"),
-            discord.SelectOption(label="BINANCERATE"),
+            discord.SelectOption(label="RGT RATE"),
+            discord.SelectOption(label="GCASH RATE"),
+            discord.SelectOption(label="BINANCE RATE"),
         ]
         super().__init__(placeholder="Choose an option to set up", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(SetupModal(self.values[0].lower()))
+        await interaction.response.send_modal(SetupModal(self.values[0].lower().replace(" ", "")))
 
 class SetupView(View):
     def __init__(self):
@@ -103,6 +102,29 @@ async def setup(interaction: discord.Interaction):
         await interaction.response.send_message("❌ You are not authorized to use this command.", ephemeral=True)
         return
     await interaction.response.send_message("Select an option to set up:", view=SetupView(), ephemeral=True)
+
+#------------------------- List of Commands -------------------------
+
+@bot.command(name="list")
+async def list_commands(ctx):
+    embed = discord.Embed(title="📜 List of Commands", color=discord.Color.blue())
+    embed.description = "Here are all the available `.commands` you can use:\n\n"
+    
+    commands_info = {
+        ".cps": "CPS Payment Information",
+        ".gcash": "GCash Payment Details",
+        ".rgt": "RGT Payment Info",
+        ".uid": "How to Get UID",
+        ".rgtrate": "RGT Rate Information",
+        ".gcashrate": "GCash Rate Details",
+        ".binancerate": "Binance Rate Details",
+    }
+    
+    for cmd, desc in commands_info.items():
+        embed.description += f"**{cmd}** - {desc}\n"
+
+    embed.description += "\nUse `/setup` to configure these commands."
+    await ctx.send(embed=embed)
 
 # ------------------------- Owner-Only Commands -------------------------
 
@@ -119,8 +141,13 @@ async def display_command(ctx, command_name: str):
         await ctx.send(f"No {command_name.upper()} message has been set. Use `/setup` to set it up.")
 
 commands_list = {
-    "rgt": "rgt", "uid": "uid", "gcash": "gcash", 
-    "rategt": "rgtrate", "rgcash": "rgcash", "rbin": "binancerate"
+    "cps": "cpspayment",
+    "gcash": "gcashpayment",
+    "rgt": "rgtpayment",
+    "uid": "howtogetuid",
+    "rgtrate": "rgtrate",
+    "gcashrate": "gcashrate",
+    "binancerate": "binancerate",
 }
 
 for cmd, setting in commands_list.items():
