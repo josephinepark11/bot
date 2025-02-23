@@ -125,35 +125,38 @@ for cmd, setting in commands_list.items():
 # ------------------------- ID Search Command (Public) -------------------------
 
 def search_items(keyword):
-    """Search for items in the items.dat file by matching names."""
+    """Search for items in the items.dat file."""
     if not os.path.exists(ITEMS_FILE):
+        print("Error: items.dat file not found!")
         return []
 
     try:
         results = []
-        current_id = None
-        current_name = None
-        
         with open(ITEMS_FILE, "r", encoding="utf-8") as file:
-            for line in file:
-                line = line.strip()
-                
-                if line.startswith('Item ID: '):
-                    current_id = int(line.split(': ')[1])
-                elif line.startswith('Name: '):
-                    current_name = line.split(': ')[1]
-                    # If we have both ID and name, check if it matches search
-                    if current_id is not None and keyword.lower() in current_name.lower():
-                        seed_id = current_id + 1
-                        results.append(f"{current_name} = `{current_id}` (Seed ID: `{seed_id}`)")
-                    # Reset for next item
-                    current_id = None
-                    current_name = None
+            data = file.read()
 
-        return results
+        # Properly split items
+        raw_items = re.split(r"-{50,}", data)  # Splits at lines with 50+ dashes
+
+        for item in raw_items:
+            name_match = re.search(r"Name:\s*(.+)", item, re.IGNORECASE)
+            id_match = re.search(r"Item ID:\s*(\d+)", item, re.IGNORECASE)
+
+            if name_match and id_match:
+                name = name_match.group(1).strip()
+                item_id = int(id_match.group(1).strip())
+                seed_id = item_id + 1  # Always seed ID = item ID + 1
+
+                # Search for substring match
+                if keyword.lower() in name.lower():
+                    results.append(f"**{name}** - **{item_id}**")
+                    results.append(f"SEED HERE - **{seed_id}**")
+
+        return results  
     except Exception as e:
         print(f"Error reading file: {e}")
         return []
+
     
 class PaginationView(View):
     def __init__(self, results, keyword, author, per_page=10):
@@ -203,7 +206,12 @@ class PaginationView(View):
         embed = discord.Embed(title=f"🔍 Results for '{self.keyword}'", color=discord.Color.blue())
         embed.description = "\n".join(f"{i+1}. {item}" for i, item in enumerate(page_results, start=start_idx + 1))
 
+        total_pages = (len(self.results) - 1) // self.per_page + 1
+        timestamp = datetime.now().strftime("%I:%M %p")
+        embed.set_footer(text=f"Requested by {self.author} | Page {self.current_page+1}/{total_pages} • Today at {timestamp}")
+
         return embed
+
 
 @bot.command(name="id")
 async def search_item(ctx, *, item_name: str):
