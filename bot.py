@@ -112,9 +112,11 @@ async def display_command(ctx, command_name: str):
     
     guild_id = str(ctx.guild.id)
     message = server_settings.get(guild_id, {}).get(command_name)
-    if message:
+
+    if message and message.strip():  # Ensure message is not empty
         embed = discord.Embed(description=message, color=discord.Color.blue())
-        embed.set_footer(text=f"Requested by {ctx.author}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
+        embed.set_footer(text=f"Requested by {ctx.author}", 
+                         icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
         await ctx.send(embed=embed)
     else:
         await ctx.send(f"No `{command_name.upper()}` message has been set. Use `/setup` to set it up.")
