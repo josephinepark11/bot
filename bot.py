@@ -113,7 +113,7 @@ async def display_command(ctx, command_name: str):
     guild_id = str(ctx.guild.id)
     message = server_settings.get(guild_id, {}).get(command_name)
     if message:
-        embed = discord.Embed(title=f"📌 {command_name.upper()} INFORMATION", description=message, color=discord.Color.blue())
+        embed = discord.Embed(description=message, color=discord.Color.blue())
         embed.set_footer(text=f"Requested by {ctx.author}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
         await ctx.send(embed=embed)
     else:
