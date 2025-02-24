@@ -162,8 +162,8 @@ def search_items(keyword):
         with open(ITEMS_FILE, "r", encoding="utf-8") as file:
             data = file.read()
 
-        # Properly split items
-        raw_items = re.split(r"-{50,}", data)  # Splits at lines with 50+ dashes
+        # Properly split items using 50+ dashes
+        raw_items = re.split(r"-{50,}", data)
 
         for item in raw_items:
             name_match = re.search(r"Name:\s*(.+)", item, re.IGNORECASE)
@@ -172,13 +172,10 @@ def search_items(keyword):
             if name_match and id_match:
                 name = name_match.group(1).strip()
                 item_id = int(id_match.group(1).strip())
-                seed_name = f"{name} Seed"
-                seed_id = item_id + 1  
 
-                # Search for substring match
+                # Check if the keyword matches either the item or its seed
                 if keyword.lower() in name.lower():
                     results.append(f"{name} - {item_id}")
-                    results.append(f"{seed_name} - {seed_id}")
 
         return results  
     except Exception as e:
@@ -188,7 +185,7 @@ def search_items(keyword):
 
     
 class PaginationView(View):
-    def __init__(self, results, keyword, author, per_page=10):
+    def __init__(self, results, keyword, author, per_page=20):
         super().__init__(timeout=60)
         self.results = results
         self.keyword = keyword
