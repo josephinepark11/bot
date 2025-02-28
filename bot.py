@@ -6,6 +6,8 @@ import os
 import re
 from datetime import datetime
 from dotenv import load_dotenv
+from discord import ButtonStyle
+from discord.ext.commands import has_permissions
 
 # Load environment variables
 load_dotenv()
@@ -20,6 +22,7 @@ bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
 SETTINGS_FILE = 'server_settings.json'
 ITEMS_FILE = "items.dat"
 server_settings = {}
+TICKET_CHANNEL_ID = 1206254577851174923  # Replace with your actual ticket channel ID
 
 # ------------------------- Load & Save Settings -------------------------
 
@@ -114,7 +117,7 @@ async def display_command(ctx, command_name: str):
     message = server_settings.get(guild_id, {}).get(command_name)
 
     if message and message.strip():  # Ensure message is not empty
-        embed = discord.Embed(description=message, color=discord.Color.blue())
+        embed = discord.Embed(description=message, color=discord.Color.random())
         embed.set_footer(text=f"Requested by {ctx.author}", 
                          icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
         await ctx.send(embed=embed)
@@ -267,5 +270,69 @@ async def search_item(ctx, *, item_name: str):
     view = PaginationView(results, item_name, ctx.author)
     embed = view.create_embed()
     await ctx.send(embed=embed, view=view)
+
+
+class TicketView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+    
+    async def create_ticket(self, interaction: discord.Interaction, category: str):
+        """Creates a private ticket thread and sends a response inside."""
+        await interaction.response.defer(ephemeral=True)
+        user = interaction.user
+        ticket_channel = interaction.guild.get_channel(TICKET_CHANNEL_ID)
+
+        # Check if the user already has an open ticket
+        for thread in ticket_channel.threads:
+            if thread.name == f"ticket - {user.name}":
+                await interaction.followup.send("❌ You already have an open ticket!", ephemeral=True)
+                return
+
+        # Create a private thread
+        thread = await ticket_channel.create_thread(
+            name=f"ticket - {user.name}",
+            type=discord.ChannelType.private_thread,
+            invitable=False
+        )
+        await thread.add_user(user)  # Add user to the thread
+
+        # Send a message in the thread
+        embed = discord.Embed(title=f"{category} Ticket", color=discord.Color.green())
+        embed.description = f"👋 **Hello {user.mention}**, staff will assist you soon.\nPlease provide details about your request."
+        await thread.send(embed=embed)
+
+    @discord.ui.button(label="BUY SCRIPT", style=ButtonStyle.blurple, custom_id="buy_script")
+    async def buy_script(self, interaction: discord.Interaction, button: Button):
+        await self.create_ticket(interaction, "BUY SCRIPT")
+
+    @discord.ui.button(label="BUY BGL", style=ButtonStyle.green, custom_id="buy_bgl")
+    async def buy_bgl(self, interaction: discord.Interaction, button: Button):
+        await self.create_ticket(interaction, "BUY BGL")
+
+    @discord.ui.button(label="HELP", style=ButtonStyle.red, custom_id="help_ticket")
+    async def help_ticket(self, interaction: discord.Interaction, button: Button):
+        await self.create_ticket(interaction, "HELP")
+
+
+@bot.command(name="ticket")
+@has_permissions(administrator=True)  # Only admins can send the ticket panel
+async def ticket_command(ctx):
+    """Sends the ticket panel in the ticket channel."""
+    ticket_channel = bot.get_channel(TICKET_CHANNEL_ID)
+    if not ticket_channel:
+        await ctx.send("❌ Ticket channel not found. Update `TICKET_CHANNEL_ID`.")
+        return
+
+    embed = discord.Embed(
+        title="🎫 Create a Ticket",
+        description="Click a button below to open a ticket.\n\n"
+                    "<:script:1270935350667378699> **BUY SCRIPT** \n"
+                    "<a:raybgl:1271323050800971878> **BUY BGL**\n"
+                    "<a:alertsiren:1270931223916707892> **HELP**\n\n"
+                    "Staff will assist you shortly!",
+        color=discord.Color.random()
+    )
+    await ticket_channel.send(embed=embed, view=TicketView())
+
 
 bot.run(TOKEN)
