@@ -272,7 +272,7 @@ async def search_item(ctx, *, item_name: str):
     await ctx.send(embed=embed, view=view)
 
 
-# ------------------------- Ticket Creation Modal -------------------------
+# ------------------------- Ticket Setup Modal -------------------------
 
 class TicketSetupModal(Modal):
     def __init__(self):
@@ -303,9 +303,15 @@ class TicketView(View):
         self.add_item(Button(label="❓ Help", style=discord.ButtonStyle.blurple, custom_id="help_ticket"))
         self.add_item(Button(label="🛑 Close", style=discord.ButtonStyle.red, custom_id="close_ticket"))
 
-    @discord.ui.button(label="Create Ticket", style=discord.ButtonStyle.grey, custom_id="create_ticket")
-    async def create_ticket(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_modal(TicketSetupModal())
+# ------------------------- Owner-Only Setup Command -------------------------
+
+@bot.tree.command(name="setup_ticket", description="Set up the ticket panel (OWNER ONLY)")
+async def setup_ticket(interaction: discord.Interaction):
+    if interaction.user.id != BOT_OWNER_ID:
+        await interaction.response.send_message("❌ You are not authorized to use this command.", ephemeral=True)
+        return
+
+    await interaction.response.send_modal(TicketSetupModal())
 
 # ------------------------- Ticket Interactions -------------------------
 
@@ -327,7 +333,7 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.channel.send(f"🔒 Ticket closed by {interaction.user.mention}.")
             await interaction.channel.delete()
 
-# ------------------------- Commands -------------------------
+# ------------------------- Owner-Only Commands -------------------------
 
 @bot.command(name="post_ticket")
 async def post_ticket(ctx):
@@ -346,6 +352,6 @@ async def ticket_command(ctx):
 
     await ctx.send("Click below to open a ticket!", view=TicketView())
 
-# ------------------ RUN -----------------------
+# ------------------------- Run the Bot -------------------------
 
 bot.run(TOKEN)
