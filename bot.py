@@ -13,7 +13,11 @@ from discord.ext.commands import has_permissions
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID"))  # Your Discord ID
-TICKET_CATEGORY_ID = int(os.getenv("TICKET_CATEGORY_ID"))
+TICKET_CATEGORY_ID = int(os.getenv("TICKET_CATEGORY_ID")) # CATEGORY TICKET ID
+TRANSCRIPT_CHANNEL_ID = int(os.getenv("TRANSCRIPT_CHANNEL_ID"))  # Change to your transcript channel ID
+
+
+
 COMMAND_PREFIX = '.'
 intents = discord.Intents.default()
 intents.message_content = True
@@ -372,19 +376,47 @@ class BuyBGLModal(Modal):
 # ------------------------- Close Ticket Modal -------------------------
 
 class CloseTicketModal(Modal):
-    def __init__(self):
+    def __init__(self, channel):
         super().__init__(title="🔒 Close Ticket")
+        self.channel = channel
         self.add_item(TextInput(label="Reason for closing?", required=True))
 
     async def on_submit(self, interaction: discord.Interaction):
         reason = self.children[0].value
+        transcript_channel = interaction.guild.get_channel(TRANSCRIPT_CHANNEL_ID)
+
+        ticket_id = self.channel.id
+        opened_by = self.channel.topic.split("|")[0] if self.channel.topic else "Unknown"
+        created_at = self.channel.created_at.strftime("%B %d, %Y %I:%M %p")
+        closed_by = interaction.user.mention
 
         embed = discord.Embed(title="🔒 Ticket Closed", color=discord.Color.red())
-        embed.add_field(name="Closed by", value=f"{interaction.user.mention}", inline=False)
-        embed.add_field(name="Reason", value=f"`{reason}`", inline=False)
+        embed.add_field(name="🆔 Ticket ID", value=f"`{ticket_id}`", inline=True)
+        embed.add_field(name="📅 Opened By", value=f"{opened_by}", inline=True)
+        embed.add_field(name="🚪 Closed By", value=f"{closed_by}", inline=True)
+        embed.add_field(name="⏰ Open Time", value=f"{created_at}", inline=True)
+        embed.add_field(name="👤 Claimed By", value="Not claimed", inline=True)
+        embed.add_field(name="📝 Reason", value=f"`{reason}`", inline=False)
+        embed.set_footer(text=f"Closed at {datetime.now().strftime('%B %d, %Y %I:%M %p')}")
 
-        await interaction.channel.send(embed=embed)
-        await interaction.channel.delete()
+        view = DeleteChannelView(self.channel)
+        await transcript_channel.send(embed=embed, view=view)
+
+        await self.channel.send(embed=embed)
+        await interaction.response.send_message("✅ Ticket logged in transcripts.", ephemeral=True)
+
+
+# ------------------------- Delete Channel Button -------------------------
+
+class DeleteChannelView(View):
+    def __init__(self, channel):
+        super().__init__(timeout=None)
+        self.channel = channel
+
+    @discord.ui.button(label="🗑 Delete Channel", style=discord.ButtonStyle.danger, custom_id="delete_channel")
+    async def delete_channel(self, interaction: discord.Interaction, button: Button):
+        await self.channel.delete()
+        await interaction.response.send_message("✅ Ticket deleted.", ephemeral=True)
 
 # ------------------------- Ticket Interactions -------------------------
 
@@ -406,9 +438,10 @@ async def on_interaction(interaction: discord.Interaction):
 async def close_ticket(ctx):
     if isinstance(ctx.channel, discord.TextChannel):  # Ensure it's inside a ticket
         await ctx.send(f"📝 {ctx.author.mention} is closing this ticket.")
-        await ctx.author.send_modal(CloseTicketModal())
+        await ctx.author.send_modal(CloseTicketModal(ctx.channel))
     else:
         await ctx.send("❌ You can only use `.close` inside a ticket.")
+
 
 # ------------------------- Setup Ticket Command -------------------------
 
