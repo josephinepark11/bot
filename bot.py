@@ -13,7 +13,7 @@ from discord.ext.commands import has_permissions
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID"))  # Your Discord ID
-
+TICKET_CATEGORY_ID = int(os.getenv("TICKET_CATEGORY_ID"))
 COMMAND_PREFIX = '.'
 intents = discord.Intents.default()
 intents.message_content = True
@@ -22,7 +22,6 @@ bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
 SETTINGS_FILE = 'server_settings.json'
 ITEMS_FILE = "items.dat"
 server_settings = {}
-TICKET_CHANNEL_ID = 1206254577851174923  # Replace with your actual ticket channel ID
 
 # ------------------------- Load & Save Settings -------------------------
 
