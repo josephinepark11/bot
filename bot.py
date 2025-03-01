@@ -277,7 +277,6 @@ async def search_item(ctx, *, item_name: str):
 class TicketSetupModal(Modal):
     def __init__(self):
         super().__init__(title="🎟 Setup Ticket Panel")
-
         self.add_item(TextInput(label="Enter Ticket Description", required=True))
         self.add_item(TextInput(label="Optional GIF URL", required=False))
 
@@ -295,10 +294,20 @@ class TicketSetupModal(Modal):
         await interaction.channel.send(embed=embed, view=view)
         await interaction.response.send_message("✅ Ticket panel created!", ephemeral=True)
 
-# ------------------------- Buy Script Modal -------------------------
-class BuyScriptModal(Modal, title="🛒 Buy Script"):
+# ------------------------- Ticket View with Buttons -------------------------
+
+class TicketView(View):
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
+        self.add_item(Button(label="🛒 BUY SCRIPT", style=discord.ButtonStyle.green, custom_id="buy_script"))
+        self.add_item(Button(label="💎 BUY BGL", style=discord.ButtonStyle.blurple, custom_id="buy_bgl"))
+        self.add_item(Button(label="❓ HELP", style=discord.ButtonStyle.grey, custom_id="help_ticket"))
+
+# ------------------------- Buy Script Modal -------------------------
+
+class BuyScriptModal(Modal):
+    def __init__(self):
+        super().__init__(title="🛒 Buy Script")
         self.add_item(TextInput(label="What script do you want to buy?", required=True))
         self.add_item(TextInput(label="What is your UID?", required=True))
 
@@ -307,58 +316,58 @@ class BuyScriptModal(Modal, title="🛒 Buy Script"):
         uid = self.children[1].value
 
         embed = discord.Embed(title="🔔 New Script Request!", color=discord.Color.green())
-        embed.add_field(name="👤 User", value=interaction.user.mention, inline=False)
-        embed.add_field(name="📜 Script", value=f"`{script_name}`", inline=False)
-        embed.add_field(name="🆔 UID", value=f"`{uid}`", inline=False)
+        embed.add_field(name="👤 User:", value=f"{interaction.user.mention}", inline=False)
+        embed.add_field(name="📜 Script:", value=f"`{script_name}`", inline=False)
+        embed.add_field(name="🆔 UID:", value=f"`{uid}`", inline=False)
         embed.add_field(name="📌", value="`.cps` (if setup is missing, say `/setup first`)", inline=False)
 
+        ticket_channel = await interaction.guild.create_text_channel(f"ticket-{interaction.user.name}")
+        await ticket_channel.send(embed=embed)
+
         await interaction.response.send_message("✅ Your request has been sent!", ephemeral=True)
-        await interaction.channel.send(embed=embed)
 
 # ------------------------- Buy BGL Modal -------------------------
-class BuyBGLModal(Modal, title="🛒 Buy BGL"):
+
+class BuyBGLModal(Modal):
     def __init__(self):
-        super().__init__()
-        self.add_item(TextInput(label="How many Ireng do you need?", required=True))
-        self.add_item(TextInput(label="Via What Payment?", required=True))
+        super().__init__(title="💎 Buy BGL")
+        self.add_item(TextInput(label="How many Ireng need?", required=True))
+        self.add_item(TextInput(label="Via what payment method?", required=True))
 
     async def on_submit(self, interaction: discord.Interaction):
         amount = self.children[0].value
-        payment_method = self.children[1].value
+        payment = self.children[1].value
 
         embed = discord.Embed(title="🔔 New BGL Purchase Request!", color=discord.Color.blue())
-        embed.add_field(name="👤 User", value=interaction.user.mention, inline=False)
-        embed.add_field(name="💰 Amount", value=f"`{amount} Ireng`", inline=False)
-        embed.add_field(name="💳 Payment Method", value=f"`{payment_method}`", inline=False)
+        embed.add_field(name="👤 User:", value=f"{interaction.user.mention}", inline=False)
+        embed.add_field(name="💰 Amount:", value=f"`{amount}` Ireng", inline=False)
+        embed.add_field(name="💳 Payment:", value=f"`{payment}`", inline=False)
         embed.add_field(name="📌", value="`.gcash`", inline=False)
 
+        ticket_channel = await interaction.guild.create_text_channel(f"ticket-{interaction.user.name}")
+        await ticket_channel.send(embed=embed)
+
         await interaction.response.send_message("✅ Your request has been sent!", ephemeral=True)
-        await interaction.channel.send(embed=embed)
 
 # ------------------------- Close Ticket Modal -------------------------
-class CloseTicketModal(Modal, title="🛑 Close Ticket"):
+
+class CloseTicketModal(Modal):
     def __init__(self):
-        super().__init__()
-        self.add_item(TextInput(label="Reason for closing", required=True))
+        super().__init__(title="🔒 Close Ticket")
+        self.add_item(TextInput(label="Reason for closing?", required=True))
 
     async def on_submit(self, interaction: discord.Interaction):
         reason = self.children[0].value
-        await interaction.channel.send(f"🔒 **Ticket closed by {interaction.user.mention}**\n📌 **Reason:** {reason}")
+
+        embed = discord.Embed(title="🔒 Ticket Closed", color=discord.Color.red())
+        embed.add_field(name="Closed by", value=f"{interaction.user.mention}", inline=False)
+        embed.add_field(name="Reason", value=f"`{reason}`", inline=False)
+
+        await interaction.channel.send(embed=embed)
         await interaction.channel.delete()
 
-# ------------------------- Ticket View with Buttons -------------------------
-class TicketView(View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(Button(label="🛒 Buy Script", style=discord.ButtonStyle.green, custom_id="buy_script"))
-        self.add_item(Button(label="💰 Buy BGL", style=discord.ButtonStyle.blurple, custom_id="buy_bgl"))
-        self.add_item(Button(label="❓ Help", style=discord.ButtonStyle.gray, custom_id="help_ticket"))
+# ------------------------- Ticket Interactions -------------------------
 
-    @discord.ui.button(label="Close Ticket", style=discord.ButtonStyle.red, custom_id="close_ticket")
-    async def close_ticket(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_modal(CloseTicketModal())
-
-# ------------------------- Handle Button Interactions -------------------------
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     if interaction.type == discord.InteractionType.component:
@@ -373,10 +382,31 @@ async def on_interaction(interaction: discord.Interaction):
                 name=f"ticket-{interaction.user.name}",
                 type=discord.ChannelType.public_thread
             )
-            await thread.send(f"🎟 **Help Ticket Opened by {interaction.user.mention}!**")
+            await thread.send(f"❓ **Help ticket opened by {interaction.user.mention}!**")
             await interaction.response.send_message(f"✅ Ticket created: {thread.mention}", ephemeral=True)
 
-# ------------------------- Owner-Only Setup Command -------------------------
+# ------------------------- Close Ticket Command -------------------------
+
+@bot.command(name="close")
+async def close_ticket(ctx):
+    if isinstance(ctx.channel, discord.TextChannel):  # Check if inside a ticket
+        await ctx.send(f"📝 {ctx.author.mention} is closing this ticket.")
+        await ctx.author.send_modal(CloseTicketModal())
+    else:
+        await ctx.send("❌ You can only use `.close` inside a ticket.")
+
+# ------------------------- Setup Ticket Command -------------------------
+
+@bot.tree.command(name="setup_ticket", description="Set up the ticket panel (OWNER ONLY)")
+async def setup_ticket(interaction: discord.Interaction):
+    if interaction.user.id != BOT_OWNER_ID:
+        await interaction.response.send_message("❌ You are not authorized to use this command.", ephemeral=True)
+        return
+
+    await interaction.response.send_modal(TicketSetupModal())
+
+# ------------------------- Owner-Only Commands -------------------------
+
 @bot.command(name="post_ticket")
 async def post_ticket(ctx):
     if ctx.author.id != BOT_OWNER_ID:
@@ -385,14 +415,13 @@ async def post_ticket(ctx):
 
     await ctx.send("Click below to open a ticket!", view=TicketView())
 
-# ------------------------- Close Ticket Command -------------------------
-@bot.command(name="close")
-async def close_ticket(ctx):
-    if isinstance(ctx.channel, discord.Thread):
-        await ctx.send("🛑 **Closing ticket...**", view=CloseTicketModal())
-    else:
-        await ctx.send("❌ This command can only be used inside a ticket.")
+@bot.command(name="ticket")
+async def ticket_command(ctx):
+    if ctx.author.id != BOT_OWNER_ID:
+        await ctx.send("❌ You are not authorized to use this command.")
+        return
 
+    await ctx.send("Click below to open a ticket!", view=TicketView())
 
 # ------------------------- Run the Bot -------------------------
 
