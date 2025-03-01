@@ -303,6 +303,31 @@ class TicketView(View):
         self.add_item(Button(label="💎 BUY BGL", style=discord.ButtonStyle.blurple, custom_id="buy_bgl"))
         self.add_item(Button(label="❓ HELP", style=discord.ButtonStyle.grey, custom_id="help_ticket"))
 
+# ------------------------- Ticket Creation Function -------------------------
+
+async def create_ticket(interaction: discord.Interaction, title: str, description: str):
+    """ Creates a private ticket channel inside the ticket category. """
+    guild = interaction.guild
+    category = discord.utils.get(guild.categories, id=TICKET_CATEGORY_ID)
+
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),  # Hide from everyone
+        interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
+        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)  # Bot access
+    }
+
+    ticket_channel = await guild.create_text_channel(
+        name=f"ticket-{interaction.user.name}",
+        category=category,
+        overwrites=overwrites
+    )
+
+    embed = discord.Embed(title=title, description=description, color=discord.Color.green())
+    embed.set_footer(text=f"Ticket opened by {interaction.user}", icon_url=interaction.user.avatar.url)
+    
+    await ticket_channel.send(f"🎟 **Ticket Opened by {interaction.user.mention}!**", embed=embed)
+    await interaction.response.send_message(f"✅ Ticket created: {ticket_channel.mention}", ephemeral=True)
+
 # ------------------------- Buy Script Modal -------------------------
 
 class BuyScriptModal(Modal):
@@ -315,16 +340,14 @@ class BuyScriptModal(Modal):
         script_name = self.children[0].value
         uid = self.children[1].value
 
-        embed = discord.Embed(title="🔔 New Script Request!", color=discord.Color.green())
-        embed.add_field(name="👤 User:", value=f"{interaction.user.mention}", inline=False)
-        embed.add_field(name="📜 Script:", value=f"`{script_name}`", inline=False)
-        embed.add_field(name="🆔 UID:", value=f"`{uid}`", inline=False)
-        embed.add_field(name="📌", value="`.cps` (if setup is missing, say `/setup first`)", inline=False)
+        embed_description = (
+            f"👤 **User:** {interaction.user.mention}\n"
+            f"📜 **Script:** `{script_name}`\n"
+            f"🆔 **UID:** `{uid}`\n"
+            f"📌 `.cps` (if setup is missing, say `/setup first`)"
+        )
 
-        ticket_channel = await interaction.guild.create_text_channel(f"ticket-{interaction.user.name}")
-        await ticket_channel.send(embed=embed)
-
-        await interaction.response.send_message("✅ Your request has been sent!", ephemeral=True)
+        await create_ticket(interaction, "🔔 New Script Request!", embed_description)
 
 # ------------------------- Buy BGL Modal -------------------------
 
@@ -338,16 +361,14 @@ class BuyBGLModal(Modal):
         amount = self.children[0].value
         payment = self.children[1].value
 
-        embed = discord.Embed(title="🔔 New BGL Purchase Request!", color=discord.Color.blue())
-        embed.add_field(name="👤 User:", value=f"{interaction.user.mention}", inline=False)
-        embed.add_field(name="💰 Amount:", value=f"`{amount}` Ireng", inline=False)
-        embed.add_field(name="💳 Payment:", value=f"`{payment}`", inline=False)
-        embed.add_field(name="📌", value="`.gcash`", inline=False)
+        embed_description = (
+            f"👤 **User:** {interaction.user.mention}\n"
+            f"💰 **Amount:** `{amount}` Ireng\n"
+            f"💳 **Payment:** `{payment}`\n"
+            f"📌 `.gcash`"
+        )
 
-        ticket_channel = await interaction.guild.create_text_channel(f"ticket-{interaction.user.name}")
-        await ticket_channel.send(embed=embed)
-
-        await interaction.response.send_message("✅ Your request has been sent!", ephemeral=True)
+        await create_ticket(interaction, "🔔 New BGL Purchase Request!", embed_description)
 
 # ------------------------- Close Ticket Modal -------------------------
 
@@ -378,18 +399,13 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_modal(BuyBGLModal())
 
         elif interaction.data["custom_id"] == "help_ticket":
-            thread = await interaction.channel.create_thread(
-                name=f"ticket-{interaction.user.name}",
-                type=discord.ChannelType.public_thread
-            )
-            await thread.send(f"❓ **Help ticket opened by {interaction.user.mention}!**")
-            await interaction.response.send_message(f"✅ Ticket created: {thread.mention}", ephemeral=True)
+            await create_ticket(interaction, "❓ Help Request", "The user needs help.")
 
 # ------------------------- Close Ticket Command -------------------------
 
 @bot.command(name="close")
 async def close_ticket(ctx):
-    if isinstance(ctx.channel, discord.TextChannel):  # Check if inside a ticket
+    if isinstance(ctx.channel, discord.TextChannel):  # Ensure it's inside a ticket
         await ctx.send(f"📝 {ctx.author.mention} is closing this ticket.")
         await ctx.author.send_modal(CloseTicketModal())
     else:
