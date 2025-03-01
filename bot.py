@@ -272,7 +272,7 @@ async def search_item(ctx, *, item_name: str):
     await ctx.send(embed=embed, view=view)
 
 
-# ------------------------- Ticket Panel Setup -------------------------
+# ------------------------- Ticket Setup Modal -------------------------
 
 class TicketSetupModal(Modal):
     def __init__(self):
@@ -305,7 +305,7 @@ class TicketView(View):
         self.add_item(Button(label="💎 BUY BGL", style=discord.ButtonStyle.blurple, custom_id="buy_bgl"))
         self.add_item(Button(label="❓ HELP", style=discord.ButtonStyle.grey, custom_id="help_ticket"))
 
-# ------------------------- Buy Script Modal -------------------------
+# ------------------------- Confirmation Modals -------------------------
 
 class BuyScriptModal(Modal):
     def __init__(self):
@@ -318,25 +318,20 @@ class BuyScriptModal(Modal):
         script_name = self.children[0].value
         uid = self.children[1].value
 
-        ticket_channel = await interaction.channel.create_thread(
-            name=f"script-{interaction.user.name}",
-            type=discord.ChannelType.public_thread
-        )
+        confirmation_modal = ScriptConfirmationModal(interaction.user, script_name, uid)
+        await interaction.response.send_modal(confirmation_modal)
 
-        await ticket_channel.send(
-            f"🔔 **New Script Request!**\n"
-            f"👤 **User:** {interaction.user.mention}\n"
-            f"📜 **Script:** `{script_name}`\n"
-            f"🆔 **UID:** `{uid}`\n\n"
-            f"📌 `.cps` (if setup is missing, say `/setup first`)"
-        )
+class ScriptConfirmationModal(Modal):
+    def __init__(self, user, script_name, uid):
+        super().__init__(title="✅ Script Purchase Confirmed!")
 
-        await interaction.response.send_message(
-            f"✅ **Your request has been created!** Check {ticket_channel.mention}.",
-            ephemeral=True
-        )
+        self.add_item(TextInput(label="👤 User", default=str(user), required=False, style=discord.TextStyle.short))
+        self.add_item(TextInput(label="📜 Script", default=script_name, required=False, style=discord.TextStyle.short))
+        self.add_item(TextInput(label="🆔 UID", default=uid, required=False, style=discord.TextStyle.short))
+        self.add_item(TextInput(label="📌 Command", default=".cps (if setup is missing, say `/setup first`)", required=False, style=discord.TextStyle.short))
 
-# ------------------------- Buy BGL Modal -------------------------
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"✅ **Request submitted!**", ephemeral=True)
 
 class BuyBGLModal(Modal):
     def __init__(self):
@@ -349,23 +344,20 @@ class BuyBGLModal(Modal):
         amount = self.children[0].value
         payment = self.children[1].value
 
-        ticket_channel = await interaction.channel.create_thread(
-            name=f"bgl-{interaction.user.name}",
-            type=discord.ChannelType.public_thread
-        )
+        confirmation_modal = BGLConfirmationModal(interaction.user, amount, payment)
+        await interaction.response.send_modal(confirmation_modal)
 
-        await ticket_channel.send(
-            f"🔔 **New BGL Purchase Request!**\n"
-            f"👤 **User:** {interaction.user.mention}\n"
-            f"💰 **Amount:** `{amount}` Ireng\n"
-            f"💳 **Payment:** `{payment}`\n\n"
-            f"📌 `.gcash`"
-        )
+class BGLConfirmationModal(Modal):
+    def __init__(self, user, amount, payment):
+        super().__init__(title="✅ BGL Purchase Confirmed!")
 
-        await interaction.response.send_message(
-            f"✅ **Your request has been created!** Check {ticket_channel.mention}.",
-            ephemeral=True
-        )
+        self.add_item(TextInput(label="👤 User", default=str(user), required=False, style=discord.TextStyle.short))
+        self.add_item(TextInput(label="💰 Amount", default=amount, required=False, style=discord.TextStyle.short))
+        self.add_item(TextInput(label="💳 Payment", default=payment, required=False, style=discord.TextStyle.short))
+        self.add_item(TextInput(label="📌 Command", default=".gcash", required=False, style=discord.TextStyle.short))
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"✅ **Request submitted!**", ephemeral=True)
 
 # ------------------------- Close Ticket Modal -------------------------
 
