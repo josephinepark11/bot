@@ -1,27 +1,24 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json
 import os
 import re
 from datetime import datetime
 from dotenv import load_dotenv
 from googletrans import Translator
 
-# ------------------------- Configuration -------------------------
-
+# Load environment variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-COMMAND_PREFIX = '.'
-ITEMS_FILE = "items.dat"
 
+COMMAND_PREFIX = '.'
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
 
-translator = Translator()
+ITEMS_FILE = "items.dat"
 
-# ------------------------- Bot Events -------------------------
+# ------------------------- Bot Initialization -------------------------
 
 @bot.event
 async def on_ready():
@@ -32,11 +29,11 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Failed to sync commands: {e}")
 
-# ------------------------- Item Search Logic -------------------------
+# ------------------------- ID Search Command (.id) -------------------------
 
 def search_items(keyword):
     if not os.path.exists(ITEMS_FILE):
-        print("⚠️ Error: items.dat file not found!")
+        print("Error: items.dat file not found!")
         return []
 
     try:
@@ -57,12 +54,10 @@ def search_items(keyword):
                 if keyword.lower() in name.lower():
                     results.append(f"{name} - {item_id}")
 
-        return results
+        return results  
     except Exception as e:
-        print(f"⚠️ Error reading file: {e}")
+        print(f"Error reading file: {e}")
         return []
-
-# ------------------------- Pagination View -------------------------
 
 class PaginationView(discord.ui.View):
     def __init__(self, results, keyword, author, per_page=20):
@@ -110,12 +105,11 @@ class PaginationView(discord.ui.View):
         page_results = self.results[start_idx:end_idx]
 
         embed = discord.Embed(
-            title=f"🔍 Results for '{self.keyword.upper()}'",
+            title=f"🔍 Results for '{self.keyword}'",
             color=discord.Color.blue()
         )
 
         embed.description = "\n".join(f"{start_idx + idx + 1}. {item}" for idx, item in enumerate(page_results))
-
         total_pages = (len(self.results) - 1) // self.per_page + 1
         timestamp = datetime.now().strftime("%I:%M %p")
 
@@ -123,10 +117,7 @@ class PaginationView(discord.ui.View):
             text=f"Requested by {self.author} | Page {self.current_page+1}/{total_pages} • Today at {timestamp}",
             icon_url=self.author.avatar.url if self.author.avatar else None
         )
-
         return embed
-
-# ------------------------- .id Command -------------------------
 
 @bot.command(name="id")
 async def search_item(ctx, *, item_name: str):
@@ -143,22 +134,20 @@ async def search_item(ctx, *, item_name: str):
     embed = view.create_embed()
     await ctx.send(embed=embed, view=view)
 
-# ------------------------- /translate Slash Command -------------------------
+# ------------------------- Translate Commands -------------------------
+
+translator = Translator()
 
 @bot.tree.command(name="translate", description="Translate text to English")
 @app_commands.describe(text="The text you want to translate")
 async def translate_command(interaction: discord.Interaction, text: str):
     try:
-        translated = translator.translate(text, dest='en')  # Auto-detects source language
-
+        translated = translator.translate(text, dest='en')
         response = f"**Original:** {text}\n**Translated:** {translated.text}"
         await interaction.response.send_message(response)
     except Exception as e:
         print(f"Translation error: {e}")
         await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
-
-
-# ------------------------- Context Menu: Translate Message -------------------------
 
 @bot.tree.context_menu(name="Translate to English")
 async def translate_context_menu(interaction: discord.Interaction, message: discord.Message):
@@ -167,13 +156,12 @@ async def translate_context_menu(interaction: discord.Interaction, message: disc
         return
 
     try:
-        translated = translator.translate(message.content, dest='en')  # Auto-detect source language
+        translated = translator.translate(message.content, dest='en')
         response = f"**Original:** {message.content}\n**Translated:** {translated.text}"
         await interaction.response.send_message(response)
     except Exception as e:
         print(f"Translation error: {e}")
         await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
-
 
 # ------------------------- Run the Bot -------------------------
 
