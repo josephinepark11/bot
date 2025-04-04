@@ -145,50 +145,35 @@ async def search_item(ctx, *, item_name: str):
 
 # ------------------------- /translate Slash Command -------------------------
 
-@bot.tree.command(name="translate", description="Translate text from Indonesian to English")
+@bot.tree.command(name="translate", description="Translate text to English")
 @app_commands.describe(text="The text you want to translate")
 async def translate_command(interaction: discord.Interaction, text: str):
     try:
-        translated = translator.translate(text, src='id', dest='en')
+        translated = translator.translate(text, dest='en')  # Auto-detects source language
 
-        embed = discord.Embed(title="🌐 Translation (Indonesian → English)", color=discord.Color.green())
-        embed.add_field(name="Original", value=text, inline=False)
-        embed.add_field(name="Translated", value=translated.text, inline=False)
-
-        embed.set_footer(
-            text=f"Requested by {interaction.user}",
-            icon_url=interaction.user.avatar.url if interaction.user.avatar else None
-        )
-
-        await interaction.response.send_message(embed=embed)
+        response = f"**Original:** {text}\n**Translated:** {translated.text}"
+        await interaction.response.send_message(response)
     except Exception as e:
         print(f"Translation error: {e}")
-        await interaction.response.send_message(f"❌ Error translating message: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
+
 
 # ------------------------- Context Menu: Translate Message -------------------------
 
 @bot.tree.context_menu(name="Translate to English")
 async def translate_context_menu(interaction: discord.Interaction, message: discord.Message):
     if not message.content:
-        await interaction.response.send_message("❌ The message has no text content to translate.", ephemeral=True)
+        await interaction.response.send_message("❌ That message has no text to translate.", ephemeral=True)
         return
 
     try:
-        translated = translator.translate(message.content, src='id', dest='en')
-
-        embed = discord.Embed(title="🌐 Translation (Indonesian → English)", color=discord.Color.green())
-        embed.add_field(name="Original", value=message.content, inline=False)
-        embed.add_field(name="Translated", value=translated.text, inline=False)
-
-        embed.set_footer(
-            text=f"Requested by {interaction.user}",
-            icon_url=interaction.user.avatar.url if interaction.user.avatar else None
-        )
-
-        await interaction.response.send_message(embed=embed)
+        translated = translator.translate(message.content, dest='en')  # Auto-detect source language
+        response = f"**Original:** {message.content}\n**Translated:** {translated.text}"
+        await interaction.response.send_message(response)
     except Exception as e:
         print(f"Translation error: {e}")
-        await interaction.response.send_message(f"❌ Error translating message: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
+
 
 # ------------------------- Run the Bot -------------------------
 
