@@ -1,13 +1,12 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json
 import os
 import re
 from datetime import datetime
 from dotenv import load_dotenv
-import requests  # For making requests to LibreTranslate
-from libretranslatepy import LibreTranslateAPI
+from googletrans import Translator
+
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -18,22 +17,21 @@ intents.message_content = True
 bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
 
 ITEMS_FILE = "items.dat"
-# Initialize the LibreTranslate API client
-translator = LibreTranslateAPI("https://libretranslate.de")
+
 # ------------------------- Bot Initialization -------------------------
+
 @bot.event
 async def on_ready():
-    print(f'Bot is ready! Logged in as {bot.user}')
-
+    print(f'✅ Bot is ready! Logged in as {bot.user}')
     try:
-        synced = await bot.tree.sync()  # Syncs slash commands globally
-        print(f"✅ Synced {len(synced)} commands.")
+        synced = await bot.tree.sync()
+        print(f"🔁 Synced {len(synced)} application commands.")
     except Exception as e:
         print(f"❌ Failed to sync commands: {e}")
 
-# ------------------------- ID Search Command (Public) -------------------------
+# ------------------------- ID Search Command (.id) -------------------------
+
 def search_items(keyword):
-    """Search for items in the items.dat file."""
     if not os.path.exists(ITEMS_FILE):
         print("Error: items.dat file not found!")
         return []
@@ -43,7 +41,6 @@ def search_items(keyword):
         with open(ITEMS_FILE, "r", encoding="utf-8") as file:
             data = file.read()
 
-        # Properly split items using 50+ dashes
         raw_items = re.split(r"-{50,}", data)
 
         for item in raw_items:
@@ -54,7 +51,6 @@ def search_items(keyword):
                 name = name_match.group(1).strip()
                 item_id = int(id_match.group(1).strip())
 
-                # Check if the keyword matches the name
                 if keyword.lower() in name.lower():
                     results.append(f"{name} - {item_id}")
 
@@ -109,22 +105,18 @@ class PaginationView(discord.ui.View):
         page_results = self.results[start_idx:end_idx]
 
         embed = discord.Embed(
-            title=f"🔍 **RESULTS FOR '{self.keyword.upper()}'**",
+            title=f"🔍 Results for '{self.keyword}'",
             color=discord.Color.blue()
         )
 
-        # Make sure numbering starts at 1 per page (1-40, 41-80, etc.)
         embed.description = "\n".join(f"{start_idx + idx + 1}. {item}" for idx, item in enumerate(page_results))
-
         total_pages = (len(self.results) - 1) // self.per_page + 1
         timestamp = datetime.now().strftime("%I:%M %p")
 
-        # Footer with user profile pic
         embed.set_footer(
             text=f"Requested by {self.author} | Page {self.current_page+1}/{total_pages} • Today at {timestamp}",
             icon_url=self.author.avatar.url if self.author.avatar else None
         )
-
         return embed
 
 @bot.command(name="id")
@@ -142,39 +134,35 @@ async def search_item(ctx, *, item_name: str):
     embed = view.create_embed()
     await ctx.send(embed=embed, view=view)
 
-# ------------------------- Translate Command -------------------------
-@bot.tree.command(name="translate", description="Translate text to English")
-@app_commands.describe(text="Text to translate")
-async def translate_command(interaction: discord.Interaction, text: str = None):
-    if not text:
-        await interaction.response.send_message("❌ Please provide text to translate.", ephemeral=True)
-        return
-    
-    try:
-        # Translate text from any language to English
-        translated = translator.translate(text, target='en')  # Corrected 'target_lang' to 'target'
-        
-        # Send the translated message
-        await interaction.response.send_message(f"Original: {text}\nTranslated: {translated}")
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+# ------------------------- Translate Commands -------------------------
 
-# ------------------------- Translate Context Menu -------------------------
+translator = Translator()
+
+@bot.tree.command(name="translate", description="Translate text to English")
+@app_commands.describe(text="The text you want to translate")
+async def translate_command(interaction: discord.Interaction, text: str):
+    try:
+        translated = translator.translate(text, dest='en')
+        response = f"**Original:** {text}\n**Translated:** {translated.text}"
+        await interaction.response.send_message(response)
+    except Exception as e:
+        print(f"Translation error: {e}")
+        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
+
 @bot.tree.context_menu(name="Translate to English")
 async def translate_context_menu(interaction: discord.Interaction, message: discord.Message):
     if not message.content:
-        await interaction.response.send_message("❌ The message has no text content to translate.", ephemeral=True)
+        await interaction.response.send_message("❌ That message has no text to translate.", ephemeral=True)
         return
-    
-    try:
-        # Translate the message from any language to English
-        translated = translator.translate(message.content, target='en')  # Corrected 'target_lang' to 'target'
-        
-        # Send the translated message
-        await interaction.response.send_message(f"Original: {message.content}\nTranslated: {translated}")
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
+    try:
+        translated = translator.translate(message.content, dest='en')
+        response = f"**Original:** {message.content}\n**Translated:** {translated.text}"
+        await interaction.response.send_message(response)
+    except Exception as e:
+        print(f"Translation error: {e}")
+        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
 
 # ------------------------- Run the Bot -------------------------
+
 bot.run(TOKEN)
