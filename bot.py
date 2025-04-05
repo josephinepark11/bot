@@ -152,7 +152,7 @@ async def translate_command(interaction: discord.Interaction, text: str = None):
     
     try:
         # Translate text from any language to English
-        translated = translator.translate(text, target_lang='en')
+        translated = translator.translate(text, target='en')  # Corrected 'target_lang' to 'target'
         
         # Send the translated message
         await interaction.response.send_message(f"Original: {text}\nTranslated: {translated}")
@@ -168,12 +168,13 @@ async def translate_context_menu(interaction: discord.Interaction, message: disc
     
     try:
         # Translate the message from any language to English
-        translated = translator.translate(message.content, target_lang='en')
+        translated = translator.translate(message.content, target='en')  # Corrected 'target_lang' to 'target'
         
         # Send the translated message
         await interaction.response.send_message(f"Original: {message.content}\nTranslated: {translated}")
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
 
 # ------------------------- Run the Bot -------------------------
 bot.run(TOKEN)
