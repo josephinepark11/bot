@@ -3,9 +3,9 @@ from discord.ext import commands
 from discord import app_commands
 import os
 import re
+import requests
 from datetime import datetime
 from dotenv import load_dotenv
-from googletrans import Translator
 
 # Load environment variables
 load_dotenv()
@@ -22,10 +22,10 @@ ITEMS_FILE = "items.dat"
 
 @bot.event
 async def on_ready():
-    print(f'✅ Bot is ready! Logged in as {bot.user}')
+    print(f'Bot is ready! Logged in as {bot.user}')
     try:
         synced = await bot.tree.sync()
-        print(f"🔁 Synced {len(synced)} application commands.")
+        print(f"✅ Synced {len(synced)} commands.")
     except Exception as e:
         print(f"❌ Failed to sync commands: {e}")
 
@@ -36,28 +36,24 @@ def search_items(keyword):
         print("Error: items.dat file not found!")
         return []
 
-    try:
-        results = []
-        with open(ITEMS_FILE, "r", encoding="utf-8") as file:
-            data = file.read()
+    results = []
+    with open(ITEMS_FILE, "r", encoding="utf-8") as file:
+        data = file.read()
 
-        raw_items = re.split(r"-{50,}", data)
+    raw_items = re.split(r"-{50,}", data)
 
-        for item in raw_items:
-            name_match = re.search(r"Name:\s*(.+)", item, re.IGNORECASE)
-            id_match = re.search(r"Item ID:\s*(\d+)", item, re.IGNORECASE)
+    for item in raw_items:
+        name_match = re.search(r"Name:\s*(.+)", item, re.IGNORECASE)
+        id_match = re.search(r"Item ID:\s*(\d+)", item, re.IGNORECASE)
 
-            if name_match and id_match:
-                name = name_match.group(1).strip()
-                item_id = int(id_match.group(1).strip())
+        if name_match and id_match:
+            name = name_match.group(1).strip()
+            item_id = int(id_match.group(1).strip())
 
-                if keyword.lower() in name.lower():
-                    results.append(f"{name} - {item_id}")
+            if keyword.lower() in name.lower():
+                results.append(f"{name} - {item_id}")
 
-        return results  
-    except Exception as e:
-        print(f"Error reading file: {e}")
-        return []
+    return results
 
 class PaginationView(discord.ui.View):
     def __init__(self, results, keyword, author, per_page=20):
@@ -83,9 +79,9 @@ class PaginationView(discord.ui.View):
         self.next_button.disabled = (self.current_page + 1) * self.per_page >= len(self.results)
 
     async def update_message(self, interaction):
-        embed = self.create_embed()
+        message = self.create_text()
         self.update_buttons()
-        await interaction.response.edit_message(embed=embed, view=self)
+        await interaction.response.edit_message(content=message, view=self)
 
     async def previous_page(self, interaction: discord.Interaction):
         if interaction.user != self.author:
@@ -99,25 +95,13 @@ class PaginationView(discord.ui.View):
         self.current_page += 1
         await self.update_message(interaction)
 
-    def create_embed(self):
+    def create_text(self):
         start_idx = self.current_page * self.per_page
         end_idx = start_idx + self.per_page
         page_results = self.results[start_idx:end_idx]
-
-        embed = discord.Embed(
-            title=f"🔍 Results for '{self.keyword}'",
-            color=discord.Color.blue()
-        )
-
-        embed.description = "\n".join(f"{start_idx + idx + 1}. {item}" for idx, item in enumerate(page_results))
+        numbered = "\n".join(f"{start_idx + i + 1}. {item}" for i, item in enumerate(page_results))
         total_pages = (len(self.results) - 1) // self.per_page + 1
-        timestamp = datetime.now().strftime("%I:%M %p")
-
-        embed.set_footer(
-            text=f"Requested by {self.author} | Page {self.current_page+1}/{total_pages} • Today at {timestamp}",
-            icon_url=self.author.avatar.url if self.author.avatar else None
-        )
-        return embed
+        return f"🔍 **Results for '{self.keyword}':**\n\n{numbered}\n\nPage {self.current_page+1}/{total_pages}"
 
 @bot.command(name="id")
 async def search_item(ctx, *, item_name: str):
@@ -131,8 +115,8 @@ async def search_item(ctx, *, item_name: str):
         return
 
     view = PaginationView(results, item_name, ctx.author)
-    embed = view.create_embed()
-    await ctx.send(embed=embed, view=view)
+    message = view.create_text()
+    await ctx.send(content=message, view=view)
 
 # ------------------------- Translation (LibreTranslate) -------------------------
 
