@@ -18,7 +18,8 @@ intents.message_content = True
 bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
 
 ITEMS_FILE = "items.dat"
-
+# Initialize the LibreTranslate API client
+translator = LibreTranslateAPI("https://libretranslate.de")
 # ------------------------- Bot Initialization -------------------------
 @bot.event
 async def on_ready():
@@ -141,57 +142,38 @@ async def search_item(ctx, *, item_name: str):
     embed = view.create_embed()
     await ctx.send(embed=embed, view=view)
 
-# ------------------------- Translate Command using LibreTranslate -------------------------
-
-# Function for translating using LibreTranslate
-def translate_text(text, target_language="en"):
+# ------------------------- Translate Command -------------------------
+@bot.tree.command(name="translate", description="Translate text to English")
+@app_commands.describe(text="Text to translate")
+async def translate_command(interaction: discord.Interaction, text: str = None):
+    if not text:
+        await interaction.response.send_message("❌ Please provide text to translate.", ephemeral=True)
+        return
+    
     try:
-        url = "https://libretranslate.de/translate"  # LibreTranslate public API URL
-        payload = {
-            'q': text,
-            'source': 'auto',  # Auto-detect the language
-            'target': target_language,
-            'format': 'text'
-        }
-        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-
-        # Make the POST request
-        response = requests.post(url, data=payload, headers=headers)
-        response.raise_for_status()  # Raise an error if the request failed
-
-        # Get the translated text
-        translated_text = response.json()['translatedText']
-        return translated_text
+        # Translate text from any language to English
+        translated = translator.translate(text, target_lang='en')
+        
+        # Send the translated message
+        await interaction.response.send_message(f"Original: {text}\nTranslated: {translated}")
     except Exception as e:
-        print(f"Error translating text: {e}")
-        return None
+        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
-# Slash Command to translate
-@bot.tree.command(name="translate", description="Translate the message you're replying to")
-async def translate_command(interaction: discord.Interaction):
-    # Check if it's a reply
-    if not interaction.message or not interaction.message.reference:
-        await interaction.response.send_message("❌ Please reply to a message to translate it.", ephemeral=True)
+# ------------------------- Translate Context Menu -------------------------
+@bot.tree.context_menu(name="Translate to English")
+async def translate_context_menu(interaction: discord.Interaction, message: discord.Message):
+    if not message.content:
+        await interaction.response.send_message("❌ The message has no text content to translate.", ephemeral=True)
         return
-
-    # Try to fetch the replied-to message
+    
     try:
-        replied_message = await interaction.channel.fetch_message(interaction.message.reference.message_id)
-    except:
-        await interaction.response.send_message("❌ Failed to fetch the message you're replying to.", ephemeral=True)
-        return
-
-    if not replied_message.content:
-        await interaction.response.send_message("❌ The replied message has no text.", ephemeral=True)
-        return
-
-    # Translate the message using LibreTranslate
-    translated_text = translate_text(replied_message.content)
-
-    if translated_text:
-        await interaction.response.send_message(f"Translated Text: {translated_text}")
-    else:
-        await interaction.response.send_message("❌ Failed to translate the message.", ephemeral=True)
+        # Translate the message from any language to English
+        translated = translator.translate(message.content, target_lang='en')
+        
+        # Send the translated message
+        await interaction.response.send_message(f"Original: {message.content}\nTranslated: {translated}")
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
 # ------------------------- Run the Bot -------------------------
 bot.run(TOKEN)
