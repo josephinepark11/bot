@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 import requests  # For making requests to LibreTranslate
-
+from libretranslatepy import LibreTranslateAPI
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
