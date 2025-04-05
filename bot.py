@@ -134,35 +134,56 @@ async def search_item(ctx, *, item_name: str):
     embed = view.create_embed()
     await ctx.send(embed=embed, view=view)
 
-# ------------------------- Translate Commands -------------------------
+# ------------------------- Translation (LibreTranslate) -------------------------
 
-translator = Translator()
-
-@bot.tree.command(name="translate", description="Translate text to English")
-@app_commands.describe(text="The text you want to translate")
-async def translate_command(interaction: discord.Interaction, text: str):
+def libre_translate(text: str, target_lang="en"):
     try:
-        translated = translator.translate(text, dest='en')
-        response = f"**Original:** {text}\n**Translated:** {translated.text}"
-        await interaction.response.send_message(response)
+        response = requests.post("https://libretranslate.com/translate", data={
+            "q": text,
+            "source": "auto",
+            "target": target_lang,
+            "format": "text"
+        })
+        response.raise_for_status()
+        return response.json()["translatedText"]
     except Exception as e:
         print(f"Translation error: {e}")
-        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
+        return None
+
+@bot.tree.command(name="translate", description="Translate a message to English")
+@app_commands.describe(message="Reply to a message to translate it")
+async def translate_command(interaction: discord.Interaction, message: discord.Message = None):
+    reference = interaction.message.reference if hasattr(interaction, 'message') and hasattr(interaction.message, 'reference') else None
+    message_to_translate = message
+
+    if not message and reference:
+        try:
+            message_to_translate = await interaction.channel.fetch_message(reference.message_id)
+        except discord.NotFound:
+            await interaction.response.send_message("❌ Referenced message not found.", ephemeral=True)
+            return
+
+    if not message_to_translate or not message_to_translate.content:
+        await interaction.response.send_message("❌ The message has no text content to translate.", ephemeral=True)
+        return
+
+    translated = libre_translate(message_to_translate.content)
+    if translated:
+        await interaction.response.send_message(f"**Translated:** {translated}")
+    else:
+        await interaction.response.send_message("❌ Failed to translate the message.", ephemeral=True)
 
 @bot.tree.context_menu(name="Translate to English")
 async def translate_context_menu(interaction: discord.Interaction, message: discord.Message):
     if not message.content:
-        await interaction.response.send_message("❌ That message has no text to translate.", ephemeral=True)
+        await interaction.response.send_message("❌ The message has no text content to translate.", ephemeral=True)
         return
 
-    try:
-        translated = translator.translate(message.content, dest='en')
-        response = f"**Original:** {message.content}\n**Translated:** {translated.text}"
-        await interaction.response.send_message(response)
-    except Exception as e:
-        print(f"Translation error: {e}")
-        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
+    translated = libre_translate(message.content)
+    if translated:
+        await interaction.response.send_message(f"**Translated:** {translated}")
+    else:
+        await interaction.response.send_message("❌ Failed to translate the message.", ephemeral=True)
 
 # ------------------------- Run the Bot -------------------------
-
 bot.run(TOKEN)
