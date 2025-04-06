@@ -5,15 +5,11 @@ import os
 import re
 from datetime import datetime
 from dotenv import load_dotenv
-import aiohttp
-import json
+from googletrans import Translator
 
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-
-# LibreTranslate endpoint - using public instance (no API key required)
-LIBRETRANSLATE_URL = "https://libretranslate.de/translate"
 
 COMMAND_PREFIX = '.'
 intents = discord.Intents.default()
@@ -138,181 +134,34 @@ async def search_item(ctx, *, item_name: str):
     embed = view.create_embed()
     await ctx.send(embed=embed, view=view)
 
-# ------------------------- Translation Functions -------------------------
-
-async def detect_language(text):
-    """Detect language using LibreTranslate API"""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://libretranslate.de/detect",
-                json={"q": text[:100]}  # Use just first 100 chars for detection
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if data and isinstance(data, list) and len(data) > 0:
-                        return data[0]["language"]
-                return "en"  # Default to English if detection fails
-    except Exception as e:
-        print(f"Language detection error: {e}")
-        return "en"  # Default to English on error
-
-async def translate_text(text, target_lang="en"):
-    """Translate text using LibreTranslate API without API key"""
-    if not text:
-        return "❌ No text provided for translation."
-    
-    try:
-        # First detect the source language
-        source_lang = await detect_language(text)
-        
-        # If already in target language, no need to translate
-        if source_lang == target_lang:
-            return text
-        
-        payload = {
-            "q": text,
-            "source": source_lang,
-            "target": target_lang
-        }
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(LIBRETRANSLATE_URL, json=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if "translatedText" in data:
-                        return data["translatedText"]
-                    return "❌ Translation response format unexpected."
-                else:
-                    error_text = await response.text()
-                    print(f"Translation error: Status {response.status}, {error_text}")
-                    return f"❌ Translation API returned status {response.status}"
-    except aiohttp.ClientError as e:
-        print(f"HTTP error during translation: {e}")
-        return f"❌ Connection error: {str(e)}"
-    except Exception as e:
-        print(f"Unexpected translation error: {e}")
-        return f"❌ Unexpected error: {str(e)}"
-
 # ------------------------- Translate Commands -------------------------
 
-# Language mapping for UI display
-LANGUAGE_MAP = {
-    "english": "en",
-    "spanish": "es",
-    "french": "fr",
-    "german": "de",
-    "italian": "it",
-    "portuguese": "pt",
-    "russian": "ru",
-    "japanese": "ja",
-    "chinese": "zh",
-    "arabic": "ar",
-    "dutch": "nl",
-    "polish": "pl",
-    "hungarian": "hu",
-    "turkish": "tr",
-    "czech": "cs",
-    "swedish": "sv",
-    "finnish": "fi",
-    "romanian": "ro",
-    "greek": "el"
-}
+translator = Translator()
 
-# Reverse mapping for display
-LANGUAGE_NAMES = {v: k.capitalize() for k, v in LANGUAGE_MAP.items()}
+@bot.tree.command(name="translate", description="Translate text to English")
+@app_commands.describe(text="The text you want to translate")
+async def translate_command(interaction: discord.Interaction, text: str):
+    try:
+        translated = translator.translate(text, dest='en')
+        response = f"**Original:** {text}\n**Translated:** {translated.text}"
+        await interaction.response.send_message(response)
+    except Exception as e:
+        print(f"Translation error: {e}")
+        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
 
-# For slash command - creating description with target languages
-TRANSLATE_DESCRIPTION = "Translate text to another language"
-
-@bot.tree.command(name="translate", description=TRANSLATE_DESCRIPTION)
-@app_commands.describe(
-    text="Text to translate",
-    target="Target language (default: English)"
-)
-async def translate_command(
-    interaction: discord.Interaction, 
-    text: str,
-    target: str = "en"
-):
-    await interaction.response.defer()
-    
-    # Get language code from map or use input as-is if not found
-    target_lang = LANGUAGE_MAP.get(target.lower(), target.lower())
-    
-    translated = await translate_text(text, target_lang)
-    
-    # Get readable language name for display
-    display_lang = LANGUAGE_NAMES.get(target_lang, target_lang.upper())
-    
-    embed = discord.Embed(
-        title=f"🌐 Translation ({display_lang})",
-        color=discord.Color.blue()
-    )
-    
-    # Add original text (truncate if too long)
-    if len(text) > 1024:
-        embed.add_field(name="Original", value=text[:1021] + "...", inline=False)
-    else:
-        embed.add_field(name="Original", value=text, inline=False)
-    
-    # Add translated text (truncate if too long)
-    if len(translated) > 1024:
-        embed.add_field(name="Translated", value=translated[:1021] + "...", inline=False)
-    else:
-        embed.add_field(name="Translated", value=translated, inline=False)
-    
-    # Add timestamp and requester info
-    timestamp = datetime.now().strftime("%I:%M %p")
-    embed.set_footer(
-        text=f"Requested by {interaction.user} • Today at {timestamp}",
-        icon_url=interaction.user.avatar.url if interaction.user.avatar else None
-    )
-    
-    await interaction.followup.send(embed=embed)
-
-# Register the context menu for right-click translate
 @bot.tree.context_menu(name="Translate to English")
 async def translate_context_menu(interaction: discord.Interaction, message: discord.Message):
     if not message.content:
         await interaction.response.send_message("❌ That message has no text to translate.", ephemeral=True)
         return
-    
-    await interaction.response.defer()
-    translated = await translate_text(message.content, 'en')
-    
-    embed = discord.Embed(
-        title="🌐 Translation (English)",
-        color=discord.Color.blue()
-    )
-    
-    # Add original text (truncate if too long)
-    if len(message.content) > 1024:
-        embed.add_field(name="Original", value=message.content[:1021] + "...", inline=False)
-    else:
-        embed.add_field(name="Original", value=message.content, inline=False)
-    
-    # Add translated text (truncate if too long)
-    if len(translated) > 1024:
-        embed.add_field(name="Translated", value=translated[:1021] + "...", inline=False)
-    else:
-        embed.add_field(name="Translated", value=translated, inline=False)
-    
-    # Add link to original message
-    embed.add_field(
-        name="Source", 
-        value=f"[Jump to message]({message.jump_url}) by {message.author.mention}",
-        inline=False
-    )
-    
-    # Add timestamp and requester info
-    timestamp = datetime.now().strftime("%I:%M %p")
-    embed.set_footer(
-        text=f"Requested by {interaction.user} • Today at {timestamp}",
-        icon_url=interaction.user.avatar.url if interaction.user.avatar else None
-    )
-    
-    await interaction.followup.send(embed=embed)
+
+    try:
+        translated = translator.translate(message.content, dest='en')
+        response = f"**Original:** {message.content}\n**Translated:** {translated.text}"
+        await interaction.response.send_message(response)
+    except Exception as e:
+        print(f"Translation error: {e}")
+        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
 
 # ------------------------- Run the Bot -------------------------
 
