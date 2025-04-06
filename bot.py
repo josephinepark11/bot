@@ -196,10 +196,39 @@ async def translate_text(text, target_lang="en"):
 
 # ------------------------- Translate Commands -------------------------
 
-@bot.tree.command(name="translate", description="Translate text to another language")
+# Language mapping for UI display
+LANGUAGE_MAP = {
+    "english": "en",
+    "spanish": "es",
+    "french": "fr",
+    "german": "de",
+    "italian": "it",
+    "portuguese": "pt",
+    "russian": "ru",
+    "japanese": "ja",
+    "chinese": "zh",
+    "arabic": "ar",
+    "dutch": "nl",
+    "polish": "pl",
+    "hungarian": "hu",
+    "turkish": "tr",
+    "czech": "cs",
+    "swedish": "sv",
+    "finnish": "fi",
+    "romanian": "ro",
+    "greek": "el"
+}
+
+# Reverse mapping for display
+LANGUAGE_NAMES = {v: k.capitalize() for k, v in LANGUAGE_MAP.items()}
+
+# For slash command - creating description with target languages
+TRANSLATE_DESCRIPTION = "Translate text to another language"
+
+@bot.tree.command(name="translate", description=TRANSLATE_DESCRIPTION)
 @app_commands.describe(
-    text="The text you want to translate",
-    target="Target language code (e.g., en, es, fr, ja, zh) - default: English"
+    text="Text to translate",
+    target="Target language (default: English)"
 )
 async def translate_command(
     interaction: discord.Interaction, 
@@ -208,41 +237,41 @@ async def translate_command(
 ):
     await interaction.response.defer()
     
-    # Map common language names to language codes
-    language_map = {
-        "english": "en",
-        "spanish": "es",
-        "french": "fr",
-        "german": "de",
-        "italian": "it",
-        "portuguese": "pt",
-        "russian": "ru",
-        "japanese": "ja",
-        "chinese": "zh",
-        "arabic": "ar",
-        "dutch": "nl",
-        "polish": "pl",
-        "hungarian": "hu",
-        "turkish": "tr",
-        "czech": "cs",
-        "swedish": "sv",
-        "finnish": "fi",
-        "romanian": "ro",
-        "greek": "el"
-    }
-    
     # Get language code from map or use input as-is if not found
-    target_lang = language_map.get(target.lower(), target.lower())
+    target_lang = LANGUAGE_MAP.get(target.lower(), target.lower())
     
     translated = await translate_text(text, target_lang)
     
     # Get readable language name for display
-    lang_names = {v: k.capitalize() for k, v in language_map.items()}
-    display_lang = lang_names.get(target_lang, target_lang.upper())
+    display_lang = LANGUAGE_NAMES.get(target_lang, target_lang.upper())
     
-    response = f"**Original:** {text}\n**Translated ({display_lang}):** {translated}"
-    await interaction.followup.send(response)
+    embed = discord.Embed(
+        title=f"🌐 Translation ({display_lang})",
+        color=discord.Color.blue()
+    )
+    
+    # Add original text (truncate if too long)
+    if len(text) > 1024:
+        embed.add_field(name="Original", value=text[:1021] + "...", inline=False)
+    else:
+        embed.add_field(name="Original", value=text, inline=False)
+    
+    # Add translated text (truncate if too long)
+    if len(translated) > 1024:
+        embed.add_field(name="Translated", value=translated[:1021] + "...", inline=False)
+    else:
+        embed.add_field(name="Translated", value=translated, inline=False)
+    
+    # Add timestamp and requester info
+    timestamp = datetime.now().strftime("%I:%M %p")
+    embed.set_footer(
+        text=f"Requested by {interaction.user} • Today at {timestamp}",
+        icon_url=interaction.user.avatar.url if interaction.user.avatar else None
+    )
+    
+    await interaction.followup.send(embed=embed)
 
+# Register the context menu for right-click translate
 @bot.tree.context_menu(name="Translate to English")
 async def translate_context_menu(interaction: discord.Interaction, message: discord.Message):
     if not message.content:
@@ -251,8 +280,39 @@ async def translate_context_menu(interaction: discord.Interaction, message: disc
     
     await interaction.response.defer()
     translated = await translate_text(message.content, 'en')
-    response = f"**Original:** {message.content}\n**Translated (English):** {translated}"
-    await interaction.followup.send(response)
+    
+    embed = discord.Embed(
+        title="🌐 Translation (English)",
+        color=discord.Color.blue()
+    )
+    
+    # Add original text (truncate if too long)
+    if len(message.content) > 1024:
+        embed.add_field(name="Original", value=message.content[:1021] + "...", inline=False)
+    else:
+        embed.add_field(name="Original", value=message.content, inline=False)
+    
+    # Add translated text (truncate if too long)
+    if len(translated) > 1024:
+        embed.add_field(name="Translated", value=translated[:1021] + "...", inline=False)
+    else:
+        embed.add_field(name="Translated", value=translated, inline=False)
+    
+    # Add link to original message
+    embed.add_field(
+        name="Source", 
+        value=f"[Jump to message]({message.jump_url}) by {message.author.mention}",
+        inline=False
+    )
+    
+    # Add timestamp and requester info
+    timestamp = datetime.now().strftime("%I:%M %p")
+    embed.set_footer(
+        text=f"Requested by {interaction.user} • Today at {timestamp}",
+        icon_url=interaction.user.avatar.url if interaction.user.avatar else None
+    )
+    
+    await interaction.followup.send(embed=embed)
 
 # ------------------------- Run the Bot -------------------------
 
