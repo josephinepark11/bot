@@ -146,7 +146,7 @@ async def translate_command(interaction: discord.Interaction, text: str):
     try:
         translated = translator.translate(text, dest='en')
         source_language = translated.src
-        response = f"**Original:** {text}\n**English:** {translated.text}"
+        response = f"**<a:indoray:1358288152728572076> Original:** {text}\n**<a:engray:1358288149687828560> English:** {translated.text}"
         await interaction.response.send_message(response)
     except Exception as e:
         print(f"Translation error: {e}")
@@ -162,7 +162,7 @@ async def translate_context_menu(interaction: discord.Interaction, message: disc
     try:
         translated = translator.translate(message.content, dest='en')
         source_language = translated.src
-        response = f"**<<a:indoray:1358288152728572076>   Original:** {message.content}\n**<a:engray:1358288149687828560> English:** {translated.text}"
+        response = f"**<a:indoray:1358288152728572076> Original:** {message.content}\n**<a:engray:1358288149687828560> English:** {translated.text}"
         await interaction.response.send_message(response)
     except Exception as e:
         print(f"Translation error: {e}")
