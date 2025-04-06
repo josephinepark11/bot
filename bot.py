@@ -5,11 +5,15 @@ import os
 import re
 from datetime import datetime
 from dotenv import load_dotenv
-from googletrans import Translator
+import aiohttp
+import json
 
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+
+# LibreTranslate endpoint - using public instance (no API key required)
+LIBRETRANSLATE_URL = "https://libretranslate.de/translate"
 
 COMMAND_PREFIX = '.'
 intents = discord.Intents.default()
@@ -134,34 +138,121 @@ async def search_item(ctx, *, item_name: str):
     embed = view.create_embed()
     await ctx.send(embed=embed, view=view)
 
+# ------------------------- Translation Functions -------------------------
+
+async def detect_language(text):
+    """Detect language using LibreTranslate API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://libretranslate.de/detect",
+                json={"q": text[:100]}  # Use just first 100 chars for detection
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data and isinstance(data, list) and len(data) > 0:
+                        return data[0]["language"]
+                return "en"  # Default to English if detection fails
+    except Exception as e:
+        print(f"Language detection error: {e}")
+        return "en"  # Default to English on error
+
+async def translate_text(text, target_lang="en"):
+    """Translate text using LibreTranslate API without API key"""
+    if not text:
+        return "❌ No text provided for translation."
+    
+    try:
+        # First detect the source language
+        source_lang = await detect_language(text)
+        
+        # If already in target language, no need to translate
+        if source_lang == target_lang:
+            return text
+        
+        payload = {
+            "q": text,
+            "source": source_lang,
+            "target": target_lang
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(LIBRETRANSLATE_URL, json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "translatedText" in data:
+                        return data["translatedText"]
+                    return "❌ Translation response format unexpected."
+                else:
+                    error_text = await response.text()
+                    print(f"Translation error: Status {response.status}, {error_text}")
+                    return f"❌ Translation API returned status {response.status}"
+    except aiohttp.ClientError as e:
+        print(f"HTTP error during translation: {e}")
+        return f"❌ Connection error: {str(e)}"
+    except Exception as e:
+        print(f"Unexpected translation error: {e}")
+        return f"❌ Unexpected error: {str(e)}"
+
 # ------------------------- Translate Commands -------------------------
 
-translator = Translator()
-
-@bot.tree.command(name="translate", description="Translate text to English")
-@app_commands.describe(text="The text you want to translate")
-async def translate_command(interaction: discord.Interaction, text: str):
-    try:
-        translated = translator.translate(text, dest='en')
-        response = f"**Original:** {text}\n**Translated:** {translated.text}"
-        await interaction.response.send_message(response)
-    except Exception as e:
-        print(f"Translation error: {e}")
-        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
+@bot.tree.command(name="translate", description="Translate text to another language")
+@app_commands.describe(
+    text="The text you want to translate",
+    target="Target language code (e.g., en, es, fr, ja, zh) - default: English"
+)
+async def translate_command(
+    interaction: discord.Interaction, 
+    text: str,
+    target: str = "en"
+):
+    await interaction.response.defer()
+    
+    # Map common language names to language codes
+    language_map = {
+        "english": "en",
+        "spanish": "es",
+        "french": "fr",
+        "german": "de",
+        "italian": "it",
+        "portuguese": "pt",
+        "russian": "ru",
+        "japanese": "ja",
+        "chinese": "zh",
+        "arabic": "ar",
+        "dutch": "nl",
+        "polish": "pl",
+        "hungarian": "hu",
+        "turkish": "tr",
+        "czech": "cs",
+        "swedish": "sv",
+        "finnish": "fi",
+        "romanian": "ro",
+        "greek": "el"
+    }
+    
+    # Get language code from map or use input as-is if not found
+    target_lang = language_map.get(target.lower(), target.lower())
+    
+    translated = await translate_text(text, target_lang)
+    
+    # Get readable language name for display
+    lang_names = {v: k.capitalize() for k, v in language_map.items()}
+    display_lang = lang_names.get(target_lang, target_lang.upper())
+    
+    response = f"**Original:** {text}\n**Translated ({display_lang}):** {translated}"
+    await interaction.followup.send(response)
 
 @bot.tree.context_menu(name="Translate to English")
 async def translate_context_menu(interaction: discord.Interaction, message: discord.Message):
     if not message.content:
         await interaction.response.send_message("❌ That message has no text to translate.", ephemeral=True)
         return
-
-    try:
-        translated = translator.translate(message.content, dest='en')
-        response = f"**Original:** {message.content}\n**Translated:** {translated.text}"
-        await interaction.response.send_message(response)
-    except Exception as e:
-        print(f"Translation error: {e}")
-        await interaction.response.send_message(f"❌ Error translating: {str(e)}", ephemeral=True)
+    
+    await interaction.response.defer()
+    translated = await translate_text(message.content, 'en')
+    response = f"**Original:** {message.content}\n**Translated (English):** {translated}"
+    await interaction.followup.send(response)
 
 # ------------------------- Run the Bot -------------------------
 
